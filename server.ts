@@ -12,7 +12,7 @@ import { GoogleGenAI } from '@google/genai';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.K_SERVICE ? (process.env.PORT || 8080) : 3000;
 
   app.use(cors());
   app.use(express.json());

@@ -39,7 +39,7 @@ export const openInGoogleWorkspace = async (
     const close_delim = "\r\n--" + boundary + "--";
 
     const bodyPrefix =
-      delimiter +
+      "--" + boundary + "\r\n" +
       "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
       JSON.stringify(metadata) +
       delimiter +
