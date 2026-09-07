@@ -32,7 +32,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 bat 'docker rm -f docflow-container >NUL 2>&1 || exit /b 0'
-                bat 'docker run -d --name docflow-container -p 3000:3000 docflow:latest'
+                bat 'docker run -d --name docflow-container -p 3001:3000 docflow:latest'
             }
         }
 
@@ -46,7 +46,7 @@ pipeline {
     post {
         success {
             echo 'DocFlow CI/CD Pipeline SUCCESSFUL'
-            echo 'Open http://localhost:3000'
+            echo 'Open http://localhost:3001'
         }
 
         failure {
