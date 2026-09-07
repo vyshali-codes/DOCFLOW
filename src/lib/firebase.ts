@@ -19,13 +19,13 @@ import {
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 const firebaseConfig = {
-  apiKey: "AIzaSyD2DSN79DG1eCRziIGOByVUJLqhcmQsg5I",
-  authDomain: "gen-lang-client-0191867085.firebaseapp.com",
-  projectId: "gen-lang-client-0191867085",
-  storageBucket: "gen-lang-client-0191867085.firebasestorage.app",
-  messagingSenderId: "979108154247",
-  appId: "1:979108154247:web:ad979be8691e6cbd8de122",
-  measurementId: "",
+  apiKey: "AIzaSyA8SWUJJQajj_JoHQi8PQCshO4-YKk93YY",
+  authDomain: "docflow-c3da2.firebaseapp.com",
+  projectId: "docflow-c3da2",
+  storageBucket: "docflow-c3da2.firebasestorage.app",
+  messagingSenderId: "513073764327",
+  appId: "1:513073764327:web:fcf6e61201d5e338244f42",
+  measurementId: "G-NC3DGL1DNX",
 };
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
