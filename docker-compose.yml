@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "3000:3000"               # host:container
+      - "127.0.0.1:3000:3000"     # host:container (IPv4 loopback)
 
     # Load all secrets from your local .env file
     env_file:
