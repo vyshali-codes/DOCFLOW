@@ -278,15 +278,14 @@ export const fileService = {
           }
           resolveUpload?.();
         };
+        const formData = new FormData();
+        formData.append("file", file);
+        xhr.open("POST", "/api/files/upload");
+        xhr.send(formData);
         return () => xhr.abort();
       },
       cancel: () => xhr.abort(),
     };
-
-    const formData = new FormData();
-    formData.append("file", file);
-    xhr.open("POST", "/api/files/upload");
-    xhr.send(formData);
 
     const finalizeUpload = async () => {
       let type = "unknown";
