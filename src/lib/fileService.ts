@@ -233,12 +233,60 @@ export const fileService = {
       : doc(collection(db, DOCUMENTS_COLLECTION));
     const docId = docRef.id;
 
-    const storageRef = ref(
-      storage,
-      `users/${auth.currentUser.uid}/${docId}/${file.name}`
-    );
+    let uploadedUrl = "";
+    let uploadError: Error | null = null;
+    let uploadComplete = false;
+    let resolveUpload: (() => void) | null = null;
+    const uploadFinished = new Promise<void>((resolve) => {
+      resolveUpload = resolve;
+    });
+    const xhr = new XMLHttpRequest();
+    const uploadTask = {
+      on: (
+        _event: string,
+        _next: (snapshot: any) => void,
+        error: (error: Error) => void,
+        complete: () => void
+      ) => {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            _next({
+              bytesTransferred: event.loaded,
+              totalBytes: event.total,
+            });
+          }
+        };
+        xhr.onerror = () => {
+          uploadError = new Error("Upload failed. Check the server connection.");
+          error(uploadError);
+          resolveUpload?.();
+        };
+        xhr.onabort = () => {
+          uploadError = new Error("Upload canceled.");
+          error(uploadError);
+          resolveUpload?.();
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const result = JSON.parse(xhr.responseText);
+            uploadedUrl = result.file.url;
+            uploadComplete = true;
+            complete();
+          } else {
+            uploadError = new Error(`Upload failed (${xhr.status}).`);
+            error(uploadError);
+          }
+          resolveUpload?.();
+        };
+        return () => xhr.abort();
+      },
+      cancel: () => xhr.abort(),
+    };
 
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    const formData = new FormData();
+    formData.append("file", file);
+    xhr.open("POST", "/api/files/upload");
+    xhr.send(formData);
 
     const finalizeUpload = async () => {
       let type = "unknown";
@@ -287,7 +335,10 @@ export const fileService = {
       else type = "file";
 
       const now = Date.now();
-      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      await uploadFinished;
+      if (!uploadComplete || uploadError) {
+        throw uploadError || new Error("Upload did not complete.");
+      }
 
       if (existingDocId) {
         try {
@@ -316,7 +367,7 @@ export const fileService = {
         title: file.name,
         type,
         size: file.size,
-        url: downloadURL,
+        url: uploadedUrl,
         parentId,
         ownerId: auth.currentUser.uid,
         ownerName: auth.currentUser.displayName || auth.currentUser.email || "Unknown",
