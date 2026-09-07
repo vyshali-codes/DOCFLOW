@@ -1,0 +1,687 @@
+import React, {
+ useMemo, useRef, useState 
+}
+ from 'react';
+ import {
+ LayoutGrid, List, Upload, Plus, Filter, ChevronRight, Home, Loader2, FileText, Search, X, Trash2, Users, Star, Clock, HardDrive 
+}
+ from 'lucide-react';
+ import {
+ useAppContext 
+}
+ from '../lib/AppContext';
+ import {
+ FileGrid, FileList 
+}
+ from '../components/FileViews';
+ import {
+ FileDetailsPanel 
+}
+ from '../components/FileDetailsPanel';
+ import {
+ FilePreviewModal 
+}
+ from '../components/FilePreviewModal';
+ import {
+ ConfirmModal 
+}
+ from '../components/ConfirmModal';
+ import {
+ useNavigate, useLocation 
+}
+ from 'react-router-dom';
+ import {
+ fileService 
+}
+ from '../lib/fileService';
+ import {
+ toast 
+}
+ from 'react-toastify';
+ export default function Dashboard() {
+ const {
+ files, viewMode, setViewMode, currentFolderId, setCurrentFolderId, selectedFileId, setSelectedFileId, searchQuery, setSearchQuery, advancedFilters, user, isLoadingFiles, addUploads, uploads 
+}
+ = useAppContext();
+ const navigate = useNavigate();
+ const fileInputRef = useRef<HTMLInputElement>(null);
+ const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+ const [newFolderName, setNewFolderName] = useState('');
+ const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+ const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const templates = [
+    { id: 'blank', name: 'Blank Document', icon: FileText, content: '', description: 'Start from scratch' },
+    { id: 'resume', name: 'Resume', icon: FileText, content: '<h1>Resume</h1><p>Contact Information</p>', description: 'Professional resume layout' },
+    { id: 'project-plan', name: 'Project Plan', icon: FileText, content: '<h1>Project Plan</h1><h2>Objectives</h2>', description: 'Plan and track project milestones' },
+    { id: 'meeting-notes', name: 'Meeting Notes', icon: FileText, content: '<h1>Meeting Notes</h1><h2>Date: </h2><h2>Attendees: </h2><h2>Action Items: </h2>', description: 'Capture meeting details and actions' }
+  ];
+  const handleCreateFromTemplate = async (template: any) => {
+    const name = prompt("Enter document name:", template.name);
+    if (name) {
+      try {
+        const docRef = await fileService.createDocument(name, currentFolderId);
+        if (template.content) {
+          await fileService.updateDocument(docRef, { content: template.content } as any);
+        }
+        setShowTemplateModal(false);
+        navigate(`/editor/${docRef}`);
+      } catch (e: any) {
+        toast.error(e.message || "Failed to create document");
+      }
+    }
+  };
+ const clickTimeout = useRef<NodeJS.Timeout | null>(null);
+ const handleFileClick = (id: string, type: string) => {
+ const file = files.find(f => f.id === id);
+ if (file?.isDeleted) {
+ toast.info("This file is in the trash. Please restore it to preview or open.");
+ return;
+ 
+}
+ if (clickTimeout.current) {
+ clearTimeout(clickTimeout.current);
+ clickTimeout.current = null;
+ 
+}
+ clickTimeout.current = setTimeout(() => {
+ if (type === 'folder') {
+ setSelectedFileId(id);
+ 
+}
+ else if (type === 'document') {
+ navigate(`/editor/${
+ id 
+}
+ `);
+ 
+}
+ else {
+ setPreviewFileId(id);
+ 
+}
+ 
+}
+ , 250);
+ 
+}
+ ;
+ const handleFileDoubleClick = (id: string, type: string) => {
+ if (clickTimeout.current) {
+ clearTimeout(clickTimeout.current);
+ clickTimeout.current = null;
+ 
+}
+ if (type === 'folder') {
+ setCurrentFolderId(id);
+ 
+}
+ else {
+ setSelectedFileId(id);
+ 
+}
+ 
+}
+ ;
+ const [conflictFiles, setConflictFiles] = useState<{
+ file: File, existingId: string}[]>([]);
+ const [currentConflict, setCurrentConflict] = useState<{
+ file: File, existingId: string 
+}
+ | null>(null);
+ const [isDragging, setIsDragging] = useState(false);
+ const handleFilesDropped = (droppedFiles: FileList | File[]) => {
+ if (droppedFiles && droppedFiles.length > 0) {
+ const selectedFiles = Array.from(droppedFiles) as File[];
+ const conflicts: {file: File, existingId: string}[] = [];
+ const nonConflicts: File[] = [];
+ selectedFiles.forEach(file => {
+ const existingFile = files.find(f => f.parentId === currentFolderId && f.name === file.name && !f.isDeleted);
+ if (existingFile) {
+ conflicts.push({
+ file, existingId: existingFile.id 
+}
+ );
+ 
+}
+ else {
+ nonConflicts.push(file);
+ 
+}
+ 
+}
+ );
+ if (nonConflicts.length > 0) {
+ addUploads(nonConflicts, currentFolderId);
+ 
+}
+ if (conflicts.length > 0) {
+ setConflictFiles(conflicts);
+ setCurrentConflict(conflicts[0]);
+ 
+}
+ 
+}
+ 
+}
+ ;
+ const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+ if (e.target.files) handleFilesDropped(e.target.files);
+ if (fileInputRef.current) fileInputRef.current.value = '';
+ 
+}
+ ;
+ const handleResolveConflict = (action: 'replace' | 'keep') => {
+ if (!currentConflict) return;
+ if (action === 'replace') {
+ addUploads([currentConflict.file], currentFolderId, currentConflict.existingId);
+ 
+}
+ else {
+ /* Keep both (rename the new file) */ const newFile = new File([currentConflict.file], `Copy of ${
+ currentConflict.file.name 
+}
+ `, {
+ type: currentConflict.file.type 
+}
+ );
+ addUploads([newFile], currentFolderId);
+ 
+}
+ const remaining = conflictFiles.slice(1);
+ setConflictFiles(remaining);
+ if (remaining.length > 0) {
+ setCurrentConflict(remaining[0]);
+ 
+}
+ else {
+ setCurrentConflict(null);
+ 
+}
+ 
+}
+ ;
+ const handleCreateFolder = async (e: React.FormEvent) => {
+ e.preventDefault();
+ if (!newFolderName.trim()) return;
+ try {
+ await fileService.createFolder(newFolderName, currentFolderId);
+ setIsCreatingFolder(false);
+ setNewFolderName('');
+ toast.success('Folder created successfully');
+ 
+}
+ catch (err: any) {
+ console.error("Folder creation failed", err);
+ toast.error(err.message || 'Failed to create folder');
+ 
+}
+ 
+}
+ ;
+ const handleMoveFile = async (fileId: string, targetFolderId: string | null) => {
+ try {
+ const file = files.find(f => f.id === fileId);
+ await fileService.updateDocument(fileId, {
+ parentId: targetFolderId 
+}
+ , file?.type === 'folder');
+ if (file) {
+ fileService.logActivity('moved', file.name);
+ 
+}
+ 
+}
+ catch (err) {
+ console.error("Failed to move file", err);
+ 
+}
+ 
+}
+ ;
+ const currentFolder = useMemo(() => {
+ return files.find(f => f.id === currentFolderId);
+ 
+}
+ , [files, currentFolderId]);
+ const breadcrumbs = useMemo(() => {
+ const crumbs = [];
+ let currentId = currentFolderId;
+ while (currentId) {
+ const folder = files.find(f => f.id === currentId);
+ if (folder) {
+ crumbs.unshift(folder);
+ currentId = folder.parentId;
+ 
+}
+ else {
+ break;
+ 
+}
+ 
+}
+ return crumbs;
+ 
+}
+ , [files, currentFolderId]);
+ const isSearchActive = searchQuery || advancedFilters.type !== 'all' || advancedFilters.owner !== 'all' || advancedFilters.dateFrom || advancedFilters.dateTo || advancedFilters.tags;
+ const location = useLocation();
+ const path = location.pathname;
+ const filteredFiles = useMemo(() => {
+ let filtered = files;
+ /* First, filter by view type */ if (path === '/trash') {
+ filtered = files.filter(f => f.isDeleted);
+ 
+}
+ else {
+ filtered = files.filter(f => !f.isDeleted);
+ if (path === '/shared') {
+ filtered = filtered.filter(f => f.sharedWith && f.sharedWith.length > 0);
+ 
+}
+ else if (path === '/starred') {
+ filtered = filtered.filter(f => f.starred);
+ 
+}
+ else if (path === '/recent') {
+ /* just taking all not deleted, we will sort and slice later */
+}
+ else if (!isSearchActive) {
+ /* Normal folder view */ filtered = filtered.filter(f => f.parentId === currentFolderId);
+ 
+}
+ 
+}
+ if (isSearchActive) {
+ if (searchQuery) {
+ const lowerQuery = searchQuery.toLowerCase();
+ filtered = filtered.filter(f => f.name.toLowerCase().includes(lowerQuery) || (f.content && f.content.toLowerCase().includes(lowerQuery)) );
+ 
+}
+ if (advancedFilters.type !== 'all') {
+ filtered = filtered.filter(f => f.type === advancedFilters.type);
+ 
+}
+ if (advancedFilters.owner !== 'all' && user) {
+ if (advancedFilters.owner === 'me') {
+ filtered = filtered.filter(f => f.ownerId === user.id);
+ 
+}
+ else {
+ filtered = filtered.filter(f => f.ownerId !== user.id);
+ 
+}
+ 
+}
+ if (advancedFilters.dateFrom) {
+ const fromDate = new Date(advancedFilters.dateFrom).getTime();
+ filtered = filtered.filter(f => new Date(f.updatedAt).getTime() >= fromDate);
+ 
+}
+ if (advancedFilters.dateTo) {
+ const toDate = new Date(advancedFilters.dateTo).getTime();
+ filtered = filtered.filter(f => new Date(f.updatedAt).getTime() <= toDate);
+ 
+}
+ if (advancedFilters.tags) {
+ const filterTags = advancedFilters.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t);
+ if (filterTags.length > 0) {
+ filtered = filtered.filter(f => {
+ const fileTags = (f as any).tags || [];
+ return filterTags.some(t => fileTags.some((ft: string) => ft.toLowerCase().includes(t)));
+ 
+}
+ );
+ 
+}
+ 
+}
+ 
+}
+ let sorted = filtered.sort((a, b) => {
+ if (path === '/recent') {
+ return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+ 
+}
+ if (a.type === 'folder' && b.type !== 'folder') return -1;
+ if (a.type !== 'folder' && b.type === 'folder') return 1;
+ return a.name.localeCompare(b.name);
+ 
+}
+ );
+ if (path === '/recent' && !isSearchActive) {
+ sorted = sorted.slice(0, 20);
+ 
+}
+ return sorted;
+ 
+}
+ , [files, currentFolderId, searchQuery, advancedFilters, isSearchActive, user, path]);
+ return ( <div className="flex h-full bg-theme-bg relative"> <div className={
+ `p-8 flex flex-col flex-1 min-w-0 overflow-y-auto relative transition-colors ${
+ isDragging ? 'bg-blue-50' : '' 
+}
+ ` 
+}
+ onClick={
+ () => setSelectedFileId(null) 
+}
+ onDragOver={
+ (e) => {
+ e.preventDefault();
+ if (e.dataTransfer.types.includes('Files')) setIsDragging(true);
+ 
+}
+ 
+}
+ onDragLeave={
+ (e) => {
+ e.preventDefault();
+ setIsDragging(false);
+ 
+}
+ 
+}
+ onDrop={
+ (e) => {
+ e.preventDefault();
+ setIsDragging(false);
+ if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+ handleFilesDropped(e.dataTransfer.files);
+ 
+}
+ 
+}
+ 
+}
+ > {
+ isDragging && ( <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-50/80 border-4 border-dashed border-blue-400 rounded-lg pointer-events-none m-4"> <div className="flex flex-col items-center text-blue-600"> <Upload className="w-16 h-16 mb-4 animate-bounce" /> <p className="text-2xl font-bold">Drop files to upload</p> </div> </div> ) 
+}
+ <div className="flex justify-between items-end mb-6" onClick={
+ (e) => e.stopPropagation() 
+}
+ > <div> {
+ path === '/dashboard' || path.startsWith('/folder') ? ( <nav className="flex text-xs text-theme-muted dark:text-theme-muted gap-2 mb-2 items-center flex-wrap"> <button onClick={
+ () => setCurrentFolderId(null) 
+}
+ className="hover:text-blue-600 transition-colors flex items-center gap-1 p-1 rounded hover:bg-theme-card-hover" onDragOver={
+ (e) => {
+ e.preventDefault();
+ e.currentTarget.classList.add('bg-blue-50', 'text-blue-600');
+ 
+}
+ 
+}
+ onDragLeave={
+ (e) => {
+ e.currentTarget.classList.remove('bg-blue-50', 'text-blue-600');
+ 
+}
+ 
+}
+ onDrop={
+ (e) => {
+ e.preventDefault();
+ e.currentTarget.classList.remove('bg-blue-50', 'text-blue-600');
+ const fileId = e.dataTransfer.getData('text/plain');
+ if (fileId && currentFolderId !== null) {
+ handleMoveFile(fileId, null);
+ 
+}
+ 
+}
+ 
+}
+ > <Home className="w-3 h-3"/> My Drive </button> {
+ breadcrumbs.map((crumb, index) => ( <React.Fragment key={
+ crumb.id 
+}
+ > <span>/</span> <button onClick={
+ () => setCurrentFolderId(crumb.id) 
+}
+ className={
+ `hover:text-blue-600 transition-colors p-1 rounded hover:bg-theme-card-hover ${
+ index === breadcrumbs.length - 1 ? 'text-blue-600 font-medium' : '' 
+}
+ ` 
+}
+ onDragOver={
+ (e) => {
+ e.preventDefault();
+ if(currentFolderId !== crumb.id) e.currentTarget.classList.add('bg-blue-50', 'text-blue-600');
+ 
+}
+ 
+}
+ onDragLeave={
+ (e) => {
+ e.currentTarget.classList.remove('bg-blue-50', 'text-blue-600');
+ 
+}
+ 
+}
+ onDrop={
+ (e) => {
+ e.preventDefault();
+ e.currentTarget.classList.remove('bg-blue-50', 'text-blue-600');
+ const fileId = e.dataTransfer.getData('text/plain');
+ if (fileId && currentFolderId !== crumb.id) {
+ handleMoveFile(fileId, crumb.id);
+ 
+}
+ 
+}
+ 
+}
+ > {
+ crumb.name 
+}
+ </button> </React.Fragment> )) 
+}
+ </nav> ) : ( <div className="flex text-xs text-theme-muted dark:text-theme-muted gap-2 mb-2 items-center flex-wrap"> <span className="capitalize">{
+ path.replace('/', '').replace('-', ' ') 
+}
+ </span> </div> ) 
+}
+ <h1 className="text-2xl font-bold text-theme-text "> {
+ searchQuery ? 'Search Results' : ( path === '/trash' ? 'Trash' : path === '/recent' ? 'Recent' : path === '/starred' ? 'Starred' : path === '/shared' ? 'Shared with me' : (currentFolder ? currentFolder.name : 'My Drive') ) 
+}
+ </h1> {
+ path === '/trash' && ( <p className="text-sm text-theme-muted dark:text-theme-muted mt-1">Items in the trash are deleted forever after 30 days.</p> ) 
+}
+ </div> <div className="flex gap-2 items-center flex-wrap"> {
+ (path === '/dashboard' || path.startsWith('/folder')) && ( <> <input type="file" ref={
+ fileInputRef 
+}
+ onChange={
+ handleUpload 
+}
+<button onClick={() => setShowTemplateModal(true)} className="bg-theme-card hover:bg-theme-bg border border-theme-border text-theme-text px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 mr-2" > <FileText className="w-4 h-4" /> <span className="hidden sm:inline">New Document</span> </button>
+ () => setIsCreatingFolder(true) 
+}
+ className="bg-theme-card hover:bg-theme-bg border border-theme-border text-theme-text px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 mr-2" > <Plus className="w-4 h-4" /> <span className="hidden sm:inline">New Folder</span> </button> <button onClick={
+ () => fileInputRef.current?.click() 
+}
+ className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 mr-2" > <Upload className="w-4 h-4" /> <span className="hidden sm:inline">Upload</span> </button> </> ) 
+}
+ {
+ path === '/trash' && filteredFiles.length > 0 && ( <> <button onClick={
+ () => setShowEmptyTrashConfirm(true) 
+}
+ className="bg-theme-card border border-theme-border dark:border-theme-border text-theme-text hover:text-red-600 hover:border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 mr-2" > Empty Trash </button> <ConfirmModal isOpen={
+ showEmptyTrashConfirm 
+}
+ title="Empty Trash" message="Are you sure you want to permanently delete all items in trash? This cannot be undone." confirmText="Empty Trash" isDestructive={
+ true 
+}
+ onConfirm={
+ async () => {
+ for (const file of filteredFiles) {
+ await fileService.deletePermanently(file.id, file.type === 'folder');
+ 
+}
+ 
+}
+ 
+}
+ onCancel={
+ () => setShowEmptyTrashConfirm(false) 
+}
+ /> </> ) 
+}
+ <button onClick={
+ () => setViewMode('grid') 
+}
+ className={
+ `p-2 rounded-md shadow-sm transition-all border ${
+ viewMode === 'grid' ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-theme-muted hover:text-theme-text bg-theme-card border-theme-border' 
+}
+ ` 
+}
+ > <LayoutGrid className="w-4 h-4" /> </button> <button onClick={
+ () => setViewMode('list') 
+}
+ className={
+ `p-2 rounded-md shadow-sm transition-all border ${
+ viewMode === 'list' ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-theme-muted hover:text-theme-text bg-theme-card border-theme-border' 
+}
+ ` 
+}
+ > <List className="w-4 h-4" /> </button> </div> </div> <div className="flex-1 min-h-0 flex flex-col"> {
+ isLoadingFiles ? ( viewMode === 'grid' ? ( <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse"> {
+ [...Array(8)].map((_, i) => ( <div key={
+ i 
+}
+ className="bg-theme-card p-4 rounded-xl border border-theme-border h-32 flex flex-col gap-3"> <div className="flex gap-3"> <div className="w-8 h-8 bg-slate-200 rounded shrink-0"></div> <div className="flex-1"> <div className="h-4 bg-slate-200 rounded w-3/4 mb-2"></div> <div className="h-3 bg-slate-200 rounded w-1/2"></div> </div> </div> <div className="mt-auto flex justify-between"> <div className="h-3 bg-slate-200 rounded w-12"></div> <div className="h-4 bg-slate-200 rounded w-4"></div> </div> </div> )) 
+}
+ </div> ) : ( <div className="bg-theme-card rounded-xl border border-theme-border flex flex-col overflow-hidden animate-pulse"> {
+ [...Array(5)].map((_, i) => ( <div key={
+ i 
+}
+ className={
+ `px-6 py-4 flex items-center gap-4 ${
+ i !== 0 ? 'border-t border-theme-border' : '' 
+}
+ ` 
+}
+ > <div className="w-8 h-8 bg-slate-200 rounded shrink-0"></div> <div className="flex-1 flex flex-col gap-2"> <div className="h-4 bg-slate-200 rounded w-1/3"></div> <div className="h-3 bg-slate-200 rounded w-1/4"></div> </div> <div className="hidden lg:block w-32 h-4 bg-slate-200 rounded"></div> <div className="hidden lg:block w-24 h-4 bg-slate-200 rounded"></div> <div className="hidden md:block w-32 h-4 bg-slate-200 rounded"></div> </div> )) 
+}
+ </div> ) ) : filteredFiles.length === 0 ? ( <div className="flex flex-col items-center justify-center flex-1 text-center p-8 bg-theme-card rounded-2xl shadow-sm border border-theme-border dark:border-theme-border"> <div className="w-24 h-24 mb-6 flex items-center justify-center rounded-full bg-theme-bg /50"> {
+ path === '/trash' && <Trash2 className="w-12 h-12 text-theme-muted" /> 
+}
+ {
+ path === '/shared' && <Users className="w-12 h-12 text-theme-muted" /> 
+}
+ {
+ path === '/starred' && <Star className="w-12 h-12 text-amber-400" /> 
+}
+ {
+ path === '/recent' && <Clock className="w-12 h-12 text-blue-400" /> 
+}
+ {
+ (path === '/' || path.startsWith('/folder')) && <HardDrive className="w-12 h-12 text-blue-500" /> 
+}
+ </div> <h3 className="text-xl font-semibold text-theme-text dark:text-white mb-2"> {
+ path === '/trash' ? 'Trash is empty' : path === '/shared' ? 'Nothing shared with you' : path === '/starred' ? 'No starred files' : path === '/recent' ? 'No recent files' : currentFolder ? 'This folder is empty' : 'Your workspace is empty' 
+}
+ </h3> <p className="text-theme-muted dark:text-theme-muted mb-8 max-w-sm"> {
+ path === '/trash' ? 'Items moved to the trash will appear here.' : path === '/shared' ? 'Files shared with you will appear here.' : path === '/starred' ? 'Star files to easily find them later.' : path === '/recent' ? 'Files you have recently opened will appear here.' : 'Upload your first document to begin collaborating.' 
+}
+ </p> {
+ (path === '/' || path.startsWith('/folder')) && ( <div className="flex gap-4"> <button onClick={
+ () => fileInputRef.current?.click() 
+}
+ className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-md shadow-blue-500/20" > Upload File </button> <button onClick={
+ () => setIsCreatingFolder(true) 
+}
+ className="bg-theme-card border border-theme-border text-theme-text hover:border-theme-border dark:hover:border-slate-500 hover:bg-theme-bg px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm" > Create Folder </button> </div> ) 
+}
+ </div> ) : ( viewMode === 'grid' ? ( <FileGrid files={
+ filteredFiles 
+}
+ onFileClick={
+ handleFileClick 
+}
+ onFileDoubleClick={
+ handleFileDoubleClick 
+}
+ selectedFileId={
+ selectedFileId 
+}
+ onMoveFile={
+ handleMoveFile 
+}
+ /> ) : ( <FileList files={
+ filteredFiles 
+}
+ onFileClick={
+ handleFileClick 
+}
+ onFileDoubleClick={
+ handleFileDoubleClick 
+}
+ selectedFileId={
+ selectedFileId 
+}
+ onMoveFile={
+ handleMoveFile 
+}
+ /> ) ) 
+}
+ </div> </div> {
+ selectedFileId && ( <FileDetailsPanel fileId={
+ selectedFileId 
+}
+ onClose={
+ () => setSelectedFileId(null) 
+}
+ /> ) 
+}
+ {
+ previewFileId && ( <FilePreviewModal file={
+ files.find(f => f.id === previewFileId)! 
+}
+ onClose={
+ () => setPreviewFileId(null) 
+}
+ /> ) 
+}
+ {
+ isCreatingFolder && ( <div className="fixed inset-0 bg-theme-bg/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-theme-card rounded-2xl shadow-xl max-w-sm w-full overflow-hidden"> <div className="p-6"> <h3 className="text-lg font-bold text-theme-text mb-4">Create Folder</h3> <form onSubmit={
+ handleCreateFolder 
+}
+ > <input autoFocus type="text" placeholder="Folder name" value={
+ newFolderName 
+}
+ onChange={
+ (e) => setNewFolderName(e.target.value) 
+}
+ className="w-full px-4 py-2.5 rounded-xl border border-theme-border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm mb-6" /> <div className="flex justify-end gap-3"> <button type="button" onClick={
+ () => {
+ setIsCreatingFolder(false);
+ setNewFolderName('');
+ 
+}
+ 
+}
+ className="px-4 py-2 text-sm font-medium text-theme-muted dark:text-theme-muted hover:text-theme-text transition-colors" > Cancel </button> <button type="submit" disabled={
+ !newFolderName.trim() 
+}
+ className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm" > Create </button> </div> </form> </div> </div> </div> ) 
+}
+ {
+ currentConflict && ( <div className="fixed inset-0 bg-theme-bg/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-theme-card rounded-2xl shadow-xl max-w-md w-full overflow-hidden"> <div className="p-6"> <h3 className="text-lg font-bold text-theme-text mb-2">File already exists</h3> <p className="text-sm text-theme-muted dark:text-theme-muted mb-6"> A file named <span className="font-semibold text-theme-text ">{
+ currentConflict.file.name 
+}
+ </span> already exists in this folder. What would you like to do? </p> <div className="flex flex-col gap-3"> <button onClick={
+ () => handleResolveConflict('replace') 
+}
+ className="w-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg text-sm font-medium transition-colors text-left flex flex-col" > <span>Replace existing file</span> <span className="text-blue-200 font-normal mt-0.5 text-xs">The old file will be saved as a previous version.</span> </button> <button onClick={
+ () => handleResolveConflict('keep') 
+}
+ className="w-full bg-theme-card border border-theme-border hover:bg-theme-bg text-theme-text px-5 py-3 rounded-lg text-sm font-medium transition-colors text-left flex flex-col" > <span>Keep both files</span> <span className="text-theme-muted dark:text-theme-muted font-normal mt-0.5 text-xs">The new file will be renamed automatically.</span> </button> </div> </div> </div> </div> ) 
+}
+ </div> );
+ 
+}
+ 

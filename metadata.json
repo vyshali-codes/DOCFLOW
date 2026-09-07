@@ -1,0 +1,6 @@
+{
+  "name": "DOCFLOW",
+  "description": "A comprehensive cloud-based collaborative document management platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
