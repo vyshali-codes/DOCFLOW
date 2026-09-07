@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DocFlow — Docker Compose
+#
+# Quick start:
+#   1. cp .env.example .env   (fill in your secrets)
+#   2. docker compose up --build -d
+#   3. Open http://localhost:3000
+#
+# Useful commands:
+#   docker compose up --build -d   → build image and start in background
+#   docker compose up              → start in foreground (see live logs)
+#   docker compose logs -f         → tail logs of running containers
+#   docker compose down            → stop and remove containers
+#   docker compose down -v         → also remove named volumes
+#   docker compose ps              → list container status
+#   docker compose restart app     → restart only the app container
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  app:
+    # Build from the local Dockerfile (multi-stage)
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production          # use the slim production stage
+
+    container_name: docflow-app
+
+    # Restart automatically unless manually stopped
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"               # host:container
+
+    # Load all secrets from your local .env file
+    env_file:
+      - .env
+
+    # Extra environment overrides (can also live in .env)
+    environment:
+      - NODE_ENV=production
+
+    # Persist uploaded files between container restarts
+    volumes:
+      - uploads_data:/app/uploads
+
+    # Health-check mirrors the HEALTHCHECK in the Dockerfile
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    # Resource limits (tune to your server)
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+# Named volume — survives `docker compose down`
+volumes:
+  uploads_data:
+    driver: local

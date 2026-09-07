@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-theme-bg: var(--theme-bg);
+  --color-theme-text: var(--theme-text);
+  --color-theme-muted: var(--theme-text-muted);
+  --color-theme-border: var(--theme-border);
+  --color-theme-card: var(--theme-card-bg);
+  --color-theme-card-hover: var(--theme-card-hover);
+}
+
+:root {
+  --theme-bg: #F8FAFC;
+  --theme-text: #0F172A;
+  --theme-text-muted: #64748B;
+  --theme-border: #E2E8F0;
+  --theme-card-bg: #FFFFFF;
+  --theme-card-hover: #F1F5F9;
+}
+
+:root.dark {
+  --theme-bg: #020617; 
+  --theme-text: #F8FAFC; 
+  --theme-text-muted: #94A3B8; 
+  --theme-border: #1E293B; 
+  --theme-card-bg: #0F172A; 
+  --theme-card-hover: #1E293B;
+}
+
+html, body {
+  font-family: var(--font-sans);
+  background-color: var(--theme-bg);
+  color: var(--theme-text);
+}
