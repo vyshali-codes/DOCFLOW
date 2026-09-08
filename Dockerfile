@@ -59,8 +59,8 @@ RUN npm ci --omit=dev --prefer-offline --legacy-peer-deps --ignore-scripts \
 # Copy compiled artefacts from the builder stage
 COPY --from=builder /app/dist ./dist
 
-# Create uploads directory with correct ownership
-RUN mkdir -p uploads && chown -R appuser:appgroup /app
+# Create the writable uploads directory without traversing node_modules.
+RUN mkdir -p uploads && chown appuser:appgroup uploads
 
 # Switch to non-root user
 USER appuser
