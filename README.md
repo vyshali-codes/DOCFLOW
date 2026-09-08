@@ -46,6 +46,14 @@ A comprehensive cloud-based collaborative document management platform.
    docker run -p 3000:3000 -d docflow-app
    ```
 
+For the recommended setup with persistent uploads, use Docker Compose:
+
+```bash
+docker compose up --build -d
+```
+
+Uploaded files are stored in the `uploads_data` named volume and persist across container restarts.
+
 ## Production Build
 
 To build the application for a standard production environment without Docker:
